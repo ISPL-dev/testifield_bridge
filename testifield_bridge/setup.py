@@ -29,6 +29,9 @@ def after_install():
 
 def after_migrate():
     ensure_custom_fields()
+    from testifield_bridge.hr import hrms_installed, ensure_hr_custom_fields
+    if hrms_installed():
+        ensure_hr_custom_fields()
     ensure_webhooks()  # re-applies the shape of webhooks that already exist
 
 
@@ -63,7 +66,9 @@ def ensure_webhooks(url=None, secret=None):
     """One webhook per doctype per event, named 'TF <Doctype> <event>'. The
     URL and the secret come from point_webhooks; without a URL only webhooks
     that already exist are re-shaped (Frappe refuses one with no URL)."""
-    for dt in TF_DOCTYPES:
+    from testifield_bridge.hr import hrms_installed, hr_doctypes_present
+    # the HR doctypes too, where Frappe HR runs: a decision taken in Desk reaches Testifield
+    for dt in TF_DOCTYPES + (hr_doctypes_present() if hrms_installed() else []):
         for ev in webhook_events(dt):
             name = f"TF {dt} {ev}"
             if frappe.db.exists("Webhook", name):
@@ -81,7 +86,11 @@ def ensure_webhooks(url=None, secret=None):
             # The webhook renders with the document as plain data in Frappe's
             # sandbox (no doc.as_json()); every value goes in through `tojson`
             # (webhook_body), so the body is valid JSON whatever a name holds.
-            wh.webhook_json = body_template(ev)
+            wh.webhook_json = body_template(ev, whole_doc=dt in TF_DOCTYPES)
+            # an HR record reaches Testifield only if Testifield made it (its tf_ref): never
+            # an applicant, an employee or a claim entered in Desk (a Job Applicant's name
+            # is an email address)
+            wh.condition = "" if dt in TF_DOCTYPES else "doc.tf_ref"
             wh.set("webhook_headers", [])
             wh.append("webhook_headers", {"key": "Content-Type", "value": "application/json"})
             wh.enable_security = 1

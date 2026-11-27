@@ -44,6 +44,17 @@ class WebhookBody(unittest.TestCase):
         self.assertNotIn("</script>", text)
         self.assertEqual(json.loads(text)["tf_ref"], "a</script>")
 
+    def test_an_hr_record_sends_no_personal_fields_only_the_decision(self):
+        doc = {"doctype": "Employee", "name": "EMP-1", "modified": "m", "docstatus": 0, "tf_ref": "w:1",
+               "date_of_birth": "1990-01-01", "bank_ac_no": "123456789", "personal_email": "a@b.c", "ctc": 600000,
+               "status": "Active", "employee": "EMP-1", "tf_user": "asha"}
+        text = ENV.from_string(body_template("on_update", whole_doc=False)).render(doc=doc)
+        body = json.loads(text)
+        for secret in ("1990-01-01", "123456789", "a@b.c", "600000"):
+            self.assertNotIn(secret, text)
+        self.assertEqual(body["doc"], {"tf_user": "asha", "employee": "EMP-1", "status": "Active", "approval_status": None})
+        self.assertEqual(body["tf_ref"], "w:1")
+
 
 if __name__ == "__main__":
     unittest.main()

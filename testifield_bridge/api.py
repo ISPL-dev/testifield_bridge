@@ -29,7 +29,16 @@ def ping():
 def find_by_tf_ref(doctype, tf_ref):
     """The idempotency lookup, as a method so it works even where the list
     endpoint's filters are not granted."""
-    if doctype not in TF_DOCTYPES:
+    from testifield_bridge.hr import HR_DOCTYPES, HR_USER
+    if not isinstance(tf_ref, str) or not tf_ref:
+        frappe.throw(_("tf_ref is required, as text"))
+    if doctype in HR_DOCTYPES:
+        # records about people: the HR integration user only, never the finance key or a Desk user
+        if frappe.session.user != HR_USER:
+            frappe.throw(_("Only {0} may look up {1}").format(HR_USER, doctype), frappe.PermissionError)
+    elif doctype not in TF_DOCTYPES:
         frappe.throw(_("{0} is not a doctype Testifield posts to").format(doctype))
-    rows = frappe.get_all(doctype, filters={"tf_ref": tf_ref}, fields=["name", "docstatus", "modified"], limit=1)
+    # HR records through the HR user's own permissions (company, User Permissions)
+    lookup = frappe.get_list if doctype in HR_DOCTYPES else frappe.get_all
+    rows = lookup(doctype, filters={"tf_ref": tf_ref}, fields=["name", "docstatus", "modified"], limit=1)
     return rows[0] if rows else None

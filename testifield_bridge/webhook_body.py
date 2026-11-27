@@ -9,11 +9,22 @@ import json
 FIELDS = ("doctype", "name", "modified", "docstatus", "tf_ref")
 
 
-def body_template(event):
+# For a record about a person (the HR doctypes), only what Testifield needs to
+# follow a decision: never the document itself, so no date of birth, bank
+# account, salary or CV is copied into Testifield on each save (#149).
+DECISION_FIELDS = ("tf_user", "employee", "status", "approval_status")
+
+
+def body_template(event, whole_doc=True):
     """The webhook_json for one event: doctype, name, event, modified,
-    docstatus, tf_ref and the whole document, each a JSON value."""
+    docstatus, tf_ref, each a JSON value; then the whole document (finance
+    doctypes) or only the decision fields (HR doctypes, whole_doc=False)."""
     parts = [f'"event": {json.dumps(event)}']
     # a field the document does not carry is null, not a render error
     parts += [f'"{f}": {{{{ doc.{f} | default(none) | tojson }}}}' for f in FIELDS]
-    parts.append('"doc": {{ doc | tojson }}')
+    if whole_doc:
+        parts.append('"doc": {{ doc | tojson }}')
+    else:
+        inner = ", ".join(f'"{f}": {{{{ doc.{f} | default(none) | tojson }}}}' for f in DECISION_FIELDS)
+        parts.append('"doc": {' + inner + '}')
     return "{" + ", ".join(parts) + "}"
